@@ -14,7 +14,20 @@ const Editor = ({ sessionId }: { sessionId: string }) => {
     if (socketRef.current) socketRef.current.disconnect();
     socketRef.current = createSocketConnection(sessionId);
     const cleanup = setupSocketEvents({ socket: socketRef.current, editorRef, isLocalChange, setIsLocalChange, setIsConnected, clientId });
-    return cleanup;
+
+    // Track cursor movements
+    const handleSelectionChange = () => {
+      if (socketRef.current) {
+        const cursorOffset = getCursorOffset();
+        emitCursorEvent(socketRef.current, cursorOffset, clientId);
+      }
+    };
+    document.addEventListener("selectionchange", handleSelectionChange);
+
+    return () => {
+      cleanup();
+      document.removeEventListener("selectionchange", handleSelectionChange);
+    };
   }, [sessionId]);
 
   const handleInput = (e: React.FormEvent<HTMLDivElement>) => {
@@ -30,13 +43,6 @@ const Editor = ({ sessionId }: { sessionId: string }) => {
     if (e.key === "Enter") {
       e.preventDefault();
       document.execCommand("insertParagraph");
-    }
-  };
-
-  const handleCursorMove = () => {
-    if (socketRef.current) {
-      const cursorOffset = getCursorOffset();
-      emitCursorEvent(socketRef.current, cursorOffset, clientId);
     }
   };
 
@@ -59,8 +65,6 @@ const Editor = ({ sessionId }: { sessionId: string }) => {
       contentEditable
       onInput={handleInput}
       onKeyDown={handleKeyDown}
-      onClick={handleCursorMove}
-      onKeyUp={handleCursorMove}
       data-placeholder="Start typing here..."
       suppressContentEditableWarning={true}
     />

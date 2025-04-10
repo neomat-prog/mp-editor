@@ -65,41 +65,45 @@ export const emitCursorEvent = (socket: Socket, cursorOffset: number, clientId: 
   console.log(`[${clientId}] Emitted cursor:`, cursorOffset);
 };
 
-// Render other users' cursors as colored bars
 function renderCursors(cursors: { [socketId: string]: { offset: number } }, editorRef: RefObject<HTMLDivElement>, localSocketId: string) {
   if (!editorRef.current) return;
 
-  // Remove existing cursor markers
+  // Remove existing cursors
   const existingCursors = editorRef.current.querySelectorAll(".remote-cursor");
   existingCursors.forEach((cursor) => cursor.remove());
 
-  // Add new cursor markers
-  const textNode = editorRef.current.childNodes[0] || document.createTextNode("");
+  // Render each remote cursor
   Object.entries(cursors).forEach(([socketId, { offset }]) => {
-    if (socketId === localSocketId) return; // Skip local cursor
+    if (socketId === localSocketId) return; 
 
     const range = document.createRange();
+    const textNode = editorRef.current.childNodes[0] || document.createTextNode("");
     try {
-      range.setStart(textNode, Math.min(offset, textNode.length));
-      range.setEnd(textNode, Math.min(offset, textNode.length));
+      const position = Math.min(offset, textNode.length);
+      range.setStart(textNode, position);
+      range.setEnd(textNode, position);
+
+      const rect = range.getBoundingClientRect();
+      const editorRect = editorRef.current.getBoundingClientRect();
 
       const cursorEl = document.createElement("span");
       cursorEl.className = "remote-cursor";
       cursorEl.style.cssText = `
         position: absolute;
+        left: ${rect.left - editorRect.left}px;
+        top: ${rect.top - editorRect.top}px;
         width: 2px;
-        height: 1em;
+        height: 1.2em;
         background-color: ${getColorFromId(socketId)};
-        display: inline-block;
+        animation: blink 1s infinite;
       `;
-      range.insertNode(cursorEl);
+      editorRef.current.appendChild(cursorEl);
     } catch (err) {
       console.warn(`[${socketId}] Invalid cursor offset:`, err.message);
     }
   });
 }
 
-// Generate a color based on socket ID
 function getColorFromId(socketId: string) {
   const hash = socketId.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
   return `hsl(${hash % 360}, 70%, 50%)`;
