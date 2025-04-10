@@ -16,10 +16,7 @@ const io = new Server(httpServer, { cors: { origin: "*" } });
 
 async function initDb() {
   try {
-    // Drop the old table (optional, removes existing data)
     await pool.query("DROP TABLE IF EXISTS documents");
-
-    // Create the new table with session_id
     await pool.query(`
       CREATE TABLE IF NOT EXISTS documents (
         id SERIAL PRIMARY KEY,
@@ -28,15 +25,9 @@ async function initDb() {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
-
-    // Seed with a default session if it doesn’t exist
-    const res = await pool.query(
-      "SELECT content FROM documents WHERE session_id = 'default'"
-    );
+    const res = await pool.query("SELECT content FROM documents WHERE session_id = 'default'");
     if (res.rowCount === 0) {
-      await pool.query(
-        "INSERT INTO documents (session_id, content) VALUES ('default', '')"
-      );
+      await pool.query("INSERT INTO documents (session_id, content) VALUES ('default', '')");
     }
     console.log("Database initialized successfully");
   } catch (err) {
@@ -46,15 +37,9 @@ async function initDb() {
 }
 
 async function getDocumentContent(sessionId) {
-  const res = await pool.query(
-    "SELECT content FROM documents WHERE session_id = $1",
-    [sessionId]
-  );
+  const res = await pool.query("SELECT content FROM documents WHERE session_id = $1", [sessionId]);
   if (res.rowCount === 0) {
-    await pool.query(
-      "INSERT INTO documents (session_id, content) VALUES ($1, '')",
-      [sessionId]
-    );
+    await pool.query("INSERT INTO documents (session_id, content) VALUES ($1, '')", [sessionId]);
     return "";
   }
   return res.rows[0].content;
@@ -67,21 +52,41 @@ async function updateDocumentContent(sessionId, newContent) {
   );
 }
 
+// Store cursor positions per session
+const cursorPositions = new Map(); // sessionId -> Map(socketId -> { offset })
+
 io.on("connection", async (socket) => {
   const sessionId = socket.handshake.query.sessionId || "default";
   console.log(`User connected: ${socket.id} to session: ${sessionId}`);
   const documentContent = await getDocumentContent(sessionId);
-  socket.join(sessionId); // Join the new session room
+  socket.join(sessionId);
   socket.emit("init", documentContent);
 
-  socket.on("edit", async (newContent) => {
-    console.log(`Received edit in session ${sessionId}:`, newContent);
-    await updateDocumentContent(sessionId, newContent);
-    socket.to(sessionId).emit("update", newContent);
+  // Initialize cursor position for this user
+  if (!cursorPositions.has(sessionId)) {
+    cursorPositions.set(sessionId, new Map());
+  }
+  const sessionCursors = cursorPositions.get(sessionId);
+  sessionCursors.set(socket.id, { offset: 0 });
+
+  socket.on("edit", async (data) => {
+    const { content, cursorOffset } = data;
+    console.log(`Received edit in session ${sessionId}:`, content, `cursor at ${cursorOffset}`);
+    await updateDocumentContent(sessionId, content);
+    sessionCursors.set(socket.id, { offset: cursorOffset });
+    socket.to(sessionId).emit("update", { content, cursors: Object.fromEntries(sessionCursors) });
+  });
+
+  socket.on("cursor", (cursorOffset) => {
+    console.log(`Cursor moved in session ${sessionId} by ${socket.id} to ${cursorOffset}`);
+    sessionCursors.set(socket.id, { offset: cursorOffset });
+    socket.to(sessionId).emit("updateCursors", Object.fromEntries(sessionCursors));
   });
 
   socket.on("disconnect", () => {
     console.log(`User disconnected: ${socket.id} from session: ${sessionId}`);
+    sessionCursors.delete(socket.id);
+    socket.to(sessionId).emit("updateCursors", Object.fromEntries(sessionCursors));
   });
 });
 

@@ -34,31 +34,20 @@ export const setupSocketEvents = ({
     }
   });
 
-  socket.on("update", (content: string) => {
-    console.log(`[${clientId}] Received update:`, content);
+  socket.on("update", ({ content, cursors }) => {
+    console.log(`[${clientId}] Received update:`, content, cursors);
     if (!isLocalChange && editorRef.current) {
-      const selection = window.getSelection();
-      let range: Range | null = null;
-
-      if (selection && selection.rangeCount > 0) {
-        range = selection.getRangeAt(0);
-      }
-
       editorRef.current.innerHTML = content;
-
-      if (range && selection) {
-        try {
-          selection.removeAllRanges();
-          selection.addRange(range);
-        } catch (err) {
-          console.warn(
-            `[${clientId}] Could not restore selection:`,
-            (err instanceof Error ? err.message : "Unknown error")
-          );
-        }
-      }
+      renderCursors(cursors, editorRef, socket.id);
     }
     setIsLocalChange(false);
+  });
+
+  socket.on("updateCursors", (cursors) => {
+    console.log(`[${clientId}] Received cursor update:`, cursors);
+    if (editorRef.current) {
+      renderCursors(cursors, editorRef, socket.id);
+    }
   });
 
   return () => {
@@ -66,11 +55,52 @@ export const setupSocketEvents = ({
   };
 };
 
-export const emitEditEvent = (
-  socket: Socket,
-  content: string,
-  clientId: string
-) => {
-  socket.emit("edit", content);
-  console.log(`[${clientId}] Emitted edit:`, content);
+export const emitEditEvent = (socket: Socket, content: string, cursorOffset: number, clientId: string) => {
+  socket.emit("edit", { content, cursorOffset });
+  console.log(`[${clientId}] Emitted edit:`, content, `cursor at ${cursorOffset}`);
 };
+
+export const emitCursorEvent = (socket: Socket, cursorOffset: number, clientId: string) => {
+  socket.emit("cursor", cursorOffset);
+  console.log(`[${clientId}] Emitted cursor:`, cursorOffset);
+};
+
+// Render other users' cursors as colored bars
+function renderCursors(cursors: { [socketId: string]: { offset: number } }, editorRef: RefObject<HTMLDivElement>, localSocketId: string) {
+  if (!editorRef.current) return;
+
+  // Remove existing cursor markers
+  const existingCursors = editorRef.current.querySelectorAll(".remote-cursor");
+  existingCursors.forEach((cursor) => cursor.remove());
+
+  // Add new cursor markers
+  const textNode = editorRef.current.childNodes[0] || document.createTextNode("");
+  Object.entries(cursors).forEach(([socketId, { offset }]) => {
+    if (socketId === localSocketId) return; // Skip local cursor
+
+    const range = document.createRange();
+    try {
+      range.setStart(textNode, Math.min(offset, textNode.length));
+      range.setEnd(textNode, Math.min(offset, textNode.length));
+
+      const cursorEl = document.createElement("span");
+      cursorEl.className = "remote-cursor";
+      cursorEl.style.cssText = `
+        position: absolute;
+        width: 2px;
+        height: 1em;
+        background-color: ${getColorFromId(socketId)};
+        display: inline-block;
+      `;
+      range.insertNode(cursorEl);
+    } catch (err) {
+      console.warn(`[${socketId}] Invalid cursor offset:`, err.message);
+    }
+  });
+}
+
+// Generate a color based on socket ID
+function getColorFromId(socketId: string) {
+  const hash = socketId.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  return `hsl(${hash % 360}, 70%, 50%)`;
+}
