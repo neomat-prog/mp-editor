@@ -1,18 +1,34 @@
 import { useEffect, useRef, useState } from "react";
-import { io, Socket } from "socket.io-client";
+import { Socket } from "socket.io-client";
+import { createSocketConnection } from "../sockets/socket";
+import { setupSocketEvents, emitEditEvent } from "../sockets/socketEvents";
 
-
-const Editor = () => {
+const Editor = ({ sessionId }: { sessionId: string }) => {
   const editorRef = useRef<HTMLDivElement | null>(null);
   const [isConnected, setIsConnected] = useState(false);
-  const socketRef = useRef<Socket | null>(null);
   const [isLocalChange, setIsLocalChange] = useState(false);
+  const socketRef = useRef<Socket | null>(null);
+  const clientId = Math.random().toString(36).substring(2, 8);
+
+  useEffect(() => {
+    socketRef.current = createSocketConnection(sessionId);
+    const cleanup = setupSocketEvents({
+      socket: socketRef.current,
+      editorRef,
+      isLocalChange,
+      setIsLocalChange,
+      setIsConnected,
+      clientId,
+    });
+    return cleanup;
+  }, [sessionId]);
 
   const handleInput = (e: React.FormEvent<HTMLDivElement>) => {
     const newContent = e.currentTarget.innerHTML;
     setIsLocalChange(true);
-    socketRef.current?.emit("edit", newContent);
-    console.log("Emitted edit:", newContent);
+    if (socketRef.current) {
+      emitEditEvent(socketRef.current, newContent, clientId);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -21,47 +37,6 @@ const Editor = () => {
       document.execCommand("insertParagraph");
     }
   };
-
-  useEffect(() => {
-    const serverUrl =
-      import.meta.env.VITE_SERVER_URL || "http://localhost:3001";
-    const socket = io(serverUrl, {
-      withCredentials: true,
-      transports: ["websocket"],
-    });
-    socketRef.current = socket;
-
-    socket.on("connect", () => {
-      setIsConnected(true);
-      console.log("Connected to server:", socket.id);
-    });
-    socket.on("connect_error", (err) => {
-      console.error("Connection failed:", err.message);
-    });
-
-    socket.on("init", (content: string) => {
-      if (editorRef.current) {
-        editorRef.current.innerHTML = content;
-      }
-    });
-
-    socket.on("update", (content: string) => {
-      if (!isLocalChange && editorRef.current) {
-        const selection = window.getSelection();
-        const range = selection?.getRangeAt(0);
-        editorRef.current.innerHTML = content;
-        if (range && selection) {
-          selection.removeAllRanges();
-          selection.addRange(range);
-        }
-      }
-      setIsLocalChange(false);
-    });
-
-    return () => {
-      socket.disconnect();
-    };
-  }, []);
 
   return (
     <div
