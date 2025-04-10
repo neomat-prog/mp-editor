@@ -11,7 +11,12 @@ const Editor = ({ sessionId }: { sessionId: string }) => {
   const clientId = Math.random().toString(36).substring(2, 8);
 
   useEffect(() => {
+    if (socketRef.current) {
+      socketRef.current.disconnect();
+    }
+
     socketRef.current = createSocketConnection(sessionId);
+
     const cleanup = setupSocketEvents({
       socket: socketRef.current,
       editorRef,
@@ -20,7 +25,10 @@ const Editor = ({ sessionId }: { sessionId: string }) => {
       setIsConnected,
       clientId,
     });
-    return cleanup;
+
+    return () => {
+      cleanup();
+    };
   }, [sessionId]);
 
   const handleInput = (e: React.FormEvent<HTMLDivElement>) => {

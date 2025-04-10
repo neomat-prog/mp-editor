@@ -30,9 +30,13 @@ async function initDb() {
     `);
 
     // Seed with a default session if it doesn’t exist
-    const res = await pool.query("SELECT content FROM documents WHERE session_id = 'default'");
+    const res = await pool.query(
+      "SELECT content FROM documents WHERE session_id = 'default'"
+    );
     if (res.rowCount === 0) {
-      await pool.query("INSERT INTO documents (session_id, content) VALUES ('default', '')");
+      await pool.query(
+        "INSERT INTO documents (session_id, content) VALUES ('default', '')"
+      );
     }
     console.log("Database initialized successfully");
   } catch (err) {
@@ -42,9 +46,15 @@ async function initDb() {
 }
 
 async function getDocumentContent(sessionId) {
-  const res = await pool.query("SELECT content FROM documents WHERE session_id = $1", [sessionId]);
+  const res = await pool.query(
+    "SELECT content FROM documents WHERE session_id = $1",
+    [sessionId]
+  );
   if (res.rowCount === 0) {
-    await pool.query("INSERT INTO documents (session_id, content) VALUES ($1, '')", [sessionId]);
+    await pool.query(
+      "INSERT INTO documents (session_id, content) VALUES ($1, '')",
+      [sessionId]
+    );
     return "";
   }
   return res.rows[0].content;
@@ -60,9 +70,8 @@ async function updateDocumentContent(sessionId, newContent) {
 io.on("connection", async (socket) => {
   const sessionId = socket.handshake.query.sessionId || "default";
   console.log(`User connected: ${socket.id} to session: ${sessionId}`);
-
   const documentContent = await getDocumentContent(sessionId);
-  socket.join(sessionId);
+  socket.join(sessionId); // Join the new session room
   socket.emit("init", documentContent);
 
   socket.on("edit", async (newContent) => {

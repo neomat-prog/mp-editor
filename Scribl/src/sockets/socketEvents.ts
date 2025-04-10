@@ -38,11 +38,24 @@ export const setupSocketEvents = ({
     console.log(`[${clientId}] Received update:`, content);
     if (!isLocalChange && editorRef.current) {
       const selection = window.getSelection();
-      const range = selection?.getRangeAt(0);
+      let range: Range | null = null;
+
+      if (selection && selection.rangeCount > 0) {
+        range = selection.getRangeAt(0);
+      }
+
       editorRef.current.innerHTML = content;
+
       if (range && selection) {
-        selection.removeAllRanges();
-        selection.addRange(range);
+        try {
+          selection.removeAllRanges();
+          selection.addRange(range);
+        } catch (err) {
+          console.warn(
+            `[${clientId}] Could not restore selection:`,
+            (err instanceof Error ? err.message : "Unknown error")
+          );
+        }
       }
     }
     setIsLocalChange(false);
@@ -53,7 +66,11 @@ export const setupSocketEvents = ({
   };
 };
 
-export const emitEditEvent = (socket: Socket, content: string, clientId: string) => {
+export const emitEditEvent = (
+  socket: Socket,
+  content: string,
+  clientId: string
+) => {
   socket.emit("edit", content);
   console.log(`[${clientId}] Emitted edit:`, content);
 };
