@@ -62,15 +62,33 @@ async function updateDocumentContent(sessionId, newContent) {
   );
 }
 
-// Store cursor positions per session
-const cursorPositions = new Map(); // sessionId -> Map(socketId -> { offset })
+
+const cursorPositions = new Map(); 
+const sessions = new Map();
 
 io.on("connection", async (socket) => {
   const sessionId = socket.handshake.query.sessionId || "default";
+  const password  = socket.handshake.query.password;
+  const isPrivate = socket.handshake.query.isPrivate === "true";
+
+  if(!sessions.has(sessionId)) {
+    sessions.set(sessionId, { isPublic: !isPrivate, password: isPrivate ? password : undefined});
+  } else {
+    const session = sessions.get(sessionId);
+    if(!session.isPublic && session.password !== password) {
+      socket.emit("error", "Invalid Password");
+      socket.disconnect();
+      return;
+    }
+  }
+
+
   console.log(`User connected: ${socket.id} to session: ${sessionId}`);
   const documentContent = await getDocumentContent(sessionId);
   socket.join(sessionId);
   socket.emit("init", documentContent);
+  
+
 
   if (!cursorPositions.has(sessionId)) {
     cursorPositions.set(sessionId, new Map());

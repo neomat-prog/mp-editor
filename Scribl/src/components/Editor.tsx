@@ -1,12 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Socket } from "socket.io-client";
+import { useLocation } from "react-router-dom";
 import { createSocketConnection } from "../sockets/socket";
-import {
-  setupSocketEvents,
-  emitEditEvent,
-  emitCursorEvent,
-} from "../sockets/socketEvents";
-import { useNavigate } from "react-router-dom";
+import { setupSocketEvents, emitEditEvent, emitCursorEvent } from "../sockets/socketEvents";
 
 const Editor = ({ sessionId }: { sessionId: string }) => {
   const editorRef = useRef<HTMLDivElement | null>(null);
@@ -15,21 +11,22 @@ const Editor = ({ sessionId }: { sessionId: string }) => {
   const [userCount, setUserCount] = useState(0);
   const socketRef = useRef<Socket | null>(null);
   const clientId = Math.random().toString(36).substring(2, 8);
+  const location = useLocation();
+  const { isPrivate, password } = location.state || {};
 
   useEffect(() => {
     if (socketRef.current) socketRef.current.disconnect();
-    socketRef.current = createSocketConnection(sessionId);
+    socketRef.current = createSocketConnection(sessionId, isPrivate, password);
     const cleanup = setupSocketEvents({
       socket: socketRef.current,
       editorRef,
       isLocalChange,
       setIsLocalChange,
       setIsConnected,
-      setUserCount,
       clientId,
+      setUserCount,
     });
 
-    // Track cursor movements
     const handleSelectionChange = () => {
       if (socketRef.current) {
         const cursorOffset = getCursorOffset();
@@ -71,20 +68,10 @@ const Editor = ({ sessionId }: { sessionId: string }) => {
     }
     return 0;
   };
-  const navigate = useNavigate();
-
-  const handleReturnHome = () => {
-    navigate(`/`);
-  };
 
   return (
     <div>
-      <div className="flex justify-between m-3 bg-blue-300">
-        <p>Users: {userCount}</p>
-        <button className="border-1 p-1 rounded-2xl" onClick={handleReturnHome}>
-          Go back
-        </button>
-      </div>
+      <p>Users: {userCount}</p>
       <div
         ref={editorRef}
         className="h-screen w-screen p-8 text-lg outline-none overflow-auto bg-white relative"
