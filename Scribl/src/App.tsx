@@ -1,5 +1,11 @@
-import { BrowserRouter as Router, Route, Routes, useParams } from "react-router-dom";
+import {
+  BrowserRouter as Router,
+  Route,
+  Routes,
+  useParams,
+} from "react-router-dom";
 import Editor from "./components/Editor";
+import Dashboard from "./components/Dashboard";
 
 const EditorWrapper = () => {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -10,8 +16,8 @@ const App = () => {
   return (
     <Router>
       <Routes>
+        <Route path="/" element={<Dashboard />} />
         <Route path="/:sessionId" element={<EditorWrapper />} />
-        <Route path="/" element={<Editor sessionId="default" />} />
       </Routes>
     </Router>
   );

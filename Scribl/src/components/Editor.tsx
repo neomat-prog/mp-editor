@@ -6,6 +6,7 @@ import {
   emitEditEvent,
   emitCursorEvent,
 } from "../sockets/socketEvents";
+import { useNavigate } from "react-router-dom";
 
 const Editor = ({ sessionId }: { sessionId: string }) => {
   const editorRef = useRef<HTMLDivElement | null>(null);
@@ -70,10 +71,20 @@ const Editor = ({ sessionId }: { sessionId: string }) => {
     }
     return 0;
   };
+  const navigate = useNavigate();
+
+  const handleReturnHome = () => {
+    navigate(`/`);
+  };
 
   return (
     <div>
-      <p>Users: {userCount}</p>
+      <div className="flex justify-between m-3 bg-blue-300">
+        <p>Users: {userCount}</p>
+        <button className="border-1 p-1 rounded-2xl" onClick={handleReturnHome}>
+          Go back
+        </button>
+      </div>
       <div
         ref={editorRef}
         className="h-screen w-screen p-8 text-lg outline-none overflow-auto bg-white relative"
