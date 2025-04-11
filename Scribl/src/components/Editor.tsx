@@ -1,19 +1,32 @@
 import { useEffect, useRef, useState } from "react";
 import { Socket } from "socket.io-client";
 import { createSocketConnection } from "../sockets/socket";
-import { setupSocketEvents, emitEditEvent, emitCursorEvent } from "../sockets/socketEvents";
+import {
+  setupSocketEvents,
+  emitEditEvent,
+  emitCursorEvent,
+} from "../sockets/socketEvents";
 
 const Editor = ({ sessionId }: { sessionId: string }) => {
   const editorRef = useRef<HTMLDivElement | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [isLocalChange, setIsLocalChange] = useState(false);
+  const [userCount, setUserCount] = useState(0);
   const socketRef = useRef<Socket | null>(null);
   const clientId = Math.random().toString(36).substring(2, 8);
 
   useEffect(() => {
     if (socketRef.current) socketRef.current.disconnect();
     socketRef.current = createSocketConnection(sessionId);
-    const cleanup = setupSocketEvents({ socket: socketRef.current, editorRef, isLocalChange, setIsLocalChange, setIsConnected, clientId });
+    const cleanup = setupSocketEvents({
+      socket: socketRef.current,
+      editorRef,
+      isLocalChange,
+      setIsLocalChange,
+      setIsConnected,
+      setUserCount,
+      clientId,
+    });
 
     // Track cursor movements
     const handleSelectionChange = () => {
@@ -59,15 +72,18 @@ const Editor = ({ sessionId }: { sessionId: string }) => {
   };
 
   return (
-    <div
-      ref={editorRef}
-      className="h-screen w-screen p-8 text-lg outline-none overflow-auto bg-white relative"
-      contentEditable
-      onInput={handleInput}
-      onKeyDown={handleKeyDown}
-      data-placeholder="Start typing here..."
-      suppressContentEditableWarning={true}
-    />
+    <div>
+      <p>Users: {userCount}</p>
+      <div
+        ref={editorRef}
+        className="h-screen w-screen p-8 text-lg outline-none overflow-auto bg-white relative"
+        contentEditable
+        onInput={handleInput}
+        onKeyDown={handleKeyDown}
+        data-placeholder="Start typing here..."
+        suppressContentEditableWarning={true}
+      />
+    </div>
   );
 };
 

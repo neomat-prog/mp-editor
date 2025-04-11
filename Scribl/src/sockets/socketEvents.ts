@@ -8,6 +8,7 @@ interface SocketEventsProps {
   setIsLocalChange: (value: boolean) => void;
   setIsConnected: (value: boolean) => void;
   clientId: string;
+  setUserCount: (count: number) => void;
 }
 
 export const setupSocketEvents = ({
@@ -16,6 +17,7 @@ export const setupSocketEvents = ({
   isLocalChange,
   setIsLocalChange,
   setIsConnected,
+  setUserCount,
   clientId,
 }: SocketEventsProps) => {
   socket.on("connect", () => {
@@ -44,12 +46,13 @@ export const setupSocketEvents = ({
   });
 
   socket.on("updateCursors", (cursors) => {
-    console.log(`[${clientId}] Received cursor update:`, cursors);
-    if (editorRef.current) {
-      renderCursors(cursors, editorRef, socket.id);
-    }
-  });
+  console.log(`[${clientId}] Received cursor update:`, cursors);
+  if (editorRef.current) {
+    renderCursors(cursors, editorRef, socket.id);
+  }
+});
 
+  socket.on("userCount", (count) => setUserCount(count));
   return () => {
     socket.disconnect();
   };
