@@ -25,13 +25,9 @@ async function initDb() {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
-    const res = await pool.query(
-      "SELECT content FROM documents WHERE session_id = 'default'"
-    );
+    const res = await pool.query("SELECT content FROM documents WHERE session_id = 'default'");
     if (res.rowCount === 0) {
-      await pool.query(
-        "INSERT INTO documents (session_id, content) VALUES ('default', '')"
-      );
+      await pool.query("INSERT INTO documents (session_id, content) VALUES ('default', '')");
     }
     console.log("Database initialized successfully");
   } catch (err) {
@@ -41,15 +37,9 @@ async function initDb() {
 }
 
 async function getDocumentContent(sessionId) {
-  const res = await pool.query(
-    "SELECT content FROM documents WHERE session_id = $1",
-    [sessionId]
-  );
+  const res = await pool.query("SELECT content FROM documents WHERE session_id = $1", [sessionId]);
   if (res.rowCount === 0) {
-    await pool.query(
-      "INSERT INTO documents (session_id, content) VALUES ($1, '')",
-      [sessionId]
-    );
+    await pool.query("INSERT INTO documents (session_id, content) VALUES ($1, '')", [sessionId]);
     return "";
   }
   return res.rows[0].content;
@@ -62,37 +52,34 @@ async function updateDocumentContent(sessionId, newContent) {
   );
 }
 
-
-const cursorPositions = new Map(); 
-const sessions = new Map();
+const cursorPositions = new Map();
+const sessions = new Map(); // { sessionId: { isPublic, password?, creatorId? } }
 
 io.on("connection", async (socket) => {
   const sessionId = socket.handshake.query.sessionId || "default";
-  const password  = socket.handshake.query.password;
+  const password = socket.handshake.query.password;
   const isPrivate = socket.handshake.query.isPrivate === "true";
 
-  if(!sessions.has(sessionId)) {
-    sessions.set(sessionId, { isPublic: !isPrivate, password: isPrivate ? password : undefined});
-  } else {
-    const session = sessions.get(sessionId);
-    if(!session.isPublic && session.password !== password) {
-      socket.emit("error", "Invalid Password");
-      socket.disconnect();
-      return;
-    }
+  if (!sessions.has(sessionId)) {
+    sessions.set(sessionId, { isPublic: !isPrivate, password: isPrivate ? password : undefined });
   }
 
+  const session = sessions.get(sessionId);
+  if (!session.isPublic && password !== session.password) {
+    socket.emit("error", "Invalid Password");
+    socket.emit("sessionType", { isPublic: session.isPublic });
+    socket.disconnect();
+    return;
+  }
 
   console.log(`User connected: ${socket.id} to session: ${sessionId}`);
   const documentContent = await getDocumentContent(sessionId);
   socket.join(sessionId);
   socket.emit("init", documentContent);
-  
 
+  socket.emit("sessionType", { isPublic: session.isPublic });
 
-  if (!cursorPositions.has(sessionId)) {
-    cursorPositions.set(sessionId, new Map());
-  }
+  if (!cursorPositions.has(sessionId)) cursorPositions.set(sessionId, new Map());
   const sessionCursors = cursorPositions.get(sessionId);
   sessionCursors.set(socket.id, { offset: 0 });
 
@@ -100,37 +87,31 @@ io.on("connection", async (socket) => {
   console.log(`Users in ${sessionId}: ${userCount}`);
   io.to(sessionId).emit("userCount", userCount);
 
+  socket.on("setUserId", ({ userId, isCreator }) => {
+    if (isCreator && !session.creatorId) {
+      session.creatorId = userId;
+    }
+    socket.emit("isCreator", session.creatorId === userId);
+  });
+
   socket.on("edit", async (data) => {
     const { content, cursorOffset } = data;
-    console.log(
-      `Received edit in session ${sessionId}:`,
-      content,
-      `cursor at ${cursorOffset}`
-    );
+    console.log(`Received edit in session ${sessionId}:`, content, `cursor at ${cursorOffset}`);
     await updateDocumentContent(sessionId, content);
     sessionCursors.set(socket.id, { offset: cursorOffset });
-    socket
-      .to(sessionId)
-      .emit("update", { content, cursors: Object.fromEntries(sessionCursors) });
+    socket.to(sessionId).emit("update", { content, cursors: Object.fromEntries(sessionCursors) });
   });
 
   socket.on("cursor", (cursorOffset) => {
-    console.log(
-      `Cursor moved in session ${sessionId} by ${socket.id} to ${cursorOffset}`
-    );
+    console.log(`Cursor moved in session ${sessionId} by ${socket.id} to ${cursorOffset}`);
     sessionCursors.set(socket.id, { offset: cursorOffset });
-    socket
-      .to(sessionId)
-      .emit("updateCursors", Object.fromEntries(sessionCursors));
+    socket.to(sessionId).emit("updateCursors", Object.fromEntries(sessionCursors));
   });
 
   socket.on("disconnect", () => {
     console.log(`User disconnected: ${socket.id} from session: ${sessionId}`);
     sessionCursors.delete(socket.id);
-    socket
-      .to(sessionId)
-      .emit("updateCursors", Object.fromEntries(sessionCursors));
-
+    socket.to(sessionId).emit("updateCursors", Object.fromEntries(sessionCursors));
     const userCount = io.sockets.adapter.rooms.get(sessionId)?.size || 0;
     console.log(`Users in ${sessionId} after disconnect: ${userCount}`);
     io.to(sessionId).emit("userCount", userCount);
