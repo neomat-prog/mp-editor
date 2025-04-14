@@ -7,15 +7,11 @@ const Editor = ({ sessionId }: EditorProps) => {
   const editorRef = useRef<HTMLDivElement | null>(null);
   const location = useLocation();
   const { isPrivate, password } = location.state || {};
-  let userId = localStorage.getItem("userId");
-  if (!userId) {
-    userId = Math.random().toString(36).substring(2, 12);
-    localStorage.setItem("userId", userId);
-  }
 
   const {
     isConnected,
     userCount,
+    userId,
     requiresPassword,
     error,
     inputPassword,
@@ -23,7 +19,7 @@ const Editor = ({ sessionId }: EditorProps) => {
     handleEdit,
     setError,
     setInputPassword,
-  } = useSocket({ sessionId, isPrivate, password, userId, editorRef: editorRef as React.RefObject<HTMLDivElement> });
+  } = useSocket({ sessionId, isPrivate, password, editorRef: editorRef as React.RefObject<HTMLDivElement> });
 
   const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -79,8 +75,9 @@ const Editor = ({ sessionId }: EditorProps) => {
   }
 
   return (
-    <div>
+    <div className="p-4">
       <p>Users: {userCount}</p>
+      <p>User ID: {userId || "Waiting for ID..."}</p>
       <div
         ref={editorRef}
         className="h-screen w-screen p-8 text-lg outline-none overflow-auto bg-white relative"

@@ -20,7 +20,6 @@ export const useSocket = ({
   sessionId,
   isPrivate,
   password,
-  userId,
   editorRef,
 }: UseSocketProps) => {
   const [state, setState] = useState<SocketState>({
@@ -30,6 +29,7 @@ export const useSocket = ({
     error: null,
     inputPassword: "",
   });
+  const [userId, setUserId] = useState<string | null>(null);
   const [isLocalChange, setIsLocalChange] = useState(false);
   const socketRef = useRef<Socket | null>(null);
   const clientId = Math.random().toString(36).substring(2, 8);
@@ -49,7 +49,13 @@ export const useSocket = ({
 
     return new Promise<() => void>((resolve, reject) => {
       socketRef.current?.on("connect", () => {
+        console.log("Emitting setUserId:", userId);
         setIsConnected(true);
+        const storedUserId = localStorage.getItem("userId");
+        if (storedUserId) {
+            console.log(`Sending stored userId: ${storedUserId}`);
+            socketRef.current?.emit("setUserId", { userId: storedUserId, isCreator: isPrivate && !!pwd });
+          }
         socketRef.current?.emit("setUserId", {
           userId,
           isCreator: isPrivate && !!pwd,
@@ -62,6 +68,14 @@ export const useSocket = ({
           setIsConnected,
           clientId,
           setUserCount,
+        });
+        socketRef.current?.on("setUserId", ({ userId }: { userId: string }) => {
+          console.log(`Received userId from server: ${userId}`);
+          setUserId(userId);
+          localStorage.setItem("userId", userId);
+          socketRef.current?.emit("setCreator", {
+            isCreator: isPrivate && !!pwd,
+          });
         });
 
         const handleSelectionChange = () => {
@@ -127,7 +141,7 @@ export const useSocket = ({
       if (cleanup) cleanup();
       if (socketRef.current) socketRef.current.disconnect();
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId, isPrivate, password]);
 
   const handleEdit = (content: string) => {
@@ -140,6 +154,7 @@ export const useSocket = ({
 
   return {
     ...state,
+    userId,
     socket: socketRef.current,
     connectSocket,
     handleEdit,
