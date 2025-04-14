@@ -53,7 +53,7 @@ async function updateDocumentContent(sessionId, newContent) {
 }
 
 const cursorPositions = new Map();
-const sessions = new Map(); // { sessionId: { isPublic, password?, creatorId? } }
+const sessions = new Map(); 
 
 io.on("connection", async (socket) => {
   const sessionId = socket.handshake.query.sessionId || "default";
