@@ -1,19 +1,10 @@
-import { useEffect, useRef, useState } from "react";
-import { Socket } from "socket.io-client";
+import { useRef } from "react";
 import { useLocation } from "react-router-dom";
-import { createSocketConnection } from "../sockets/socket";
-import { setupSocketEvents, emitEditEvent, emitCursorEvent } from "../sockets/socketEvents";
+import { useSocket } from "../utils/useSocket";
+import { EditorProps } from "../utils/types";
 
-const Editor = ({ sessionId }: { sessionId: string }) => {
+const Editor = ({ sessionId }: EditorProps) => {
   const editorRef = useRef<HTMLDivElement | null>(null);
-  const [isConnected, setIsConnected] = useState(false);
-  const [isLocalChange, setIsLocalChange] = useState(false);
-  const [userCount, setUserCount] = useState(0);
-  const [requiresPassword, setRequiresPassword] = useState(false);
-  const [inputPassword, setInputPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const socketRef = useRef<Socket | null>(null);
-  const clientId = Math.random().toString(36).substring(2, 8);
   const location = useLocation();
   const { isPrivate, password } = location.state || {};
   let userId = localStorage.getItem("userId");
@@ -22,86 +13,17 @@ const Editor = ({ sessionId }: { sessionId: string }) => {
     localStorage.setItem("userId", userId);
   }
 
-  const connectSocket = (pwd?: string) => {
-    if (socketRef.current) socketRef.current.disconnect();
-    socketRef.current = createSocketConnection(sessionId, isPrivate, pwd);
-
-    return new Promise<void>((resolve, reject) => {
-      socketRef.current?.on("connect", () => {
-        setIsConnected(true); // Set directly here for reliability
-        socketRef.current?.emit("setUserId", { userId, isCreator: isPrivate && !!password });
-        const cleanup = setupSocketEvents({
-          socket: socketRef.current!,
-          editorRef,
-          isLocalChange,
-          setIsLocalChange,
-          setIsConnected,
-          clientId,
-          setUserCount,
-        });
-
-        const handleSelectionChange = () => {
-          if (socketRef.current && editorRef.current) {
-            const cursorOffset = getCursorOffset();
-            emitCursorEvent(socketRef.current, cursorOffset, clientId);
-          }
-        };
-        document.addEventListener("selectionchange", handleSelectionChange);
-
-        resolve();
-        return () => {
-          cleanup();
-          document.removeEventListener("selectionchange", handleSelectionChange);
-        };
-      });
-
-      socketRef.current?.on("error", (msg) => {
-        setError(msg);
-        if (msg === "Invalid Password" || msg === "Private Session") {
-          setRequiresPassword(true);
-        } else {
-          setRequiresPassword(false);
-        }
-        socketRef.current?.disconnect();
-        reject(msg);
-      });
-
-      socketRef.current?.on("isCreator", (isCreator: boolean) => {
-        if (isCreator) setRequiresPassword(false);
-      });
-
-      socketRef.current?.on("sessionType", (type: { isPublic: boolean }) => {
-        if (!type.isPublic && !isPrivate && !password) setRequiresPassword(true);
-      });
-
-      socketRef.current?.on("disconnect", () => {
-        setIsConnected(false);
-      });
-    });
-  };
-
-  useEffect(() => {
-    let cleanup: (() => void) | undefined;
-
-    const attemptConnection = async () => {
-      try {
-        if (isPrivate && password) {
-          cleanup = await connectSocket(password);
-        } else {
-          cleanup = await connectSocket();
-        }
-      } catch (err) {
-        console.log("Connection failed:", err);
-      }
-    };
-
-    attemptConnection();
-
-    return () => {
-      if (cleanup) cleanup();
-      if (socketRef.current) socketRef.current.disconnect();
-    };
-  }, [sessionId, isPrivate, password]);
+  const {
+    isConnected,
+    userCount,
+    requiresPassword,
+    error,
+    inputPassword,
+    connectSocket,
+    handleEdit,
+    setError,
+    setInputPassword,
+  } = useSocket({ sessionId, isPrivate, password, userId, editorRef: editorRef as React.RefObject<HTMLDivElement> });
 
   const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -112,7 +34,6 @@ const Editor = ({ sessionId }: { sessionId: string }) => {
     setError(null);
     try {
       await connectSocket(inputPassword);
-      setRequiresPassword(false);
     } catch (err) {
       console.log("Password attempt failed:", err);
     }
@@ -120,34 +41,13 @@ const Editor = ({ sessionId }: { sessionId: string }) => {
 
   const handleInput = (e: React.FormEvent<HTMLDivElement>) => {
     const newContent = e.currentTarget.innerHTML;
-    setIsLocalChange(true);
-    if (socketRef.current) {
-      const cursorOffset = getCursorOffset();
-      emitEditEvent(socketRef.current, newContent, cursorOffset, clientId);
-    }
+    handleEdit(newContent);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.key === "Enter") {
       e.preventDefault();
       document.execCommand("insertParagraph");
-    }
-  };
-
-  const getCursorOffset = () => {
-    const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0 || !editorRef.current) {
-      return 0;
-    }
-    const range = selection.getRangeAt(0);
-    const preCaretRange = range.cloneRange();
-    try {
-      preCaretRange.selectNodeContents(editorRef.current);
-      preCaretRange.setEnd(range.endContainer, range.endOffset);
-      return preCaretRange.toString().length;
-    } catch (err) {
-      console.warn("Failed to calculate cursor offset:", err);
-      return 0;
     }
   };
 
