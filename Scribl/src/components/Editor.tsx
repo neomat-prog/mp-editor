@@ -11,7 +11,7 @@ const Editor = ({ sessionId }: EditorProps) => {
   const {
     isConnected,
     userCount,
-    userId,
+    // userId,
     requiresPassword,
     error,
     inputPassword,
@@ -77,7 +77,7 @@ const Editor = ({ sessionId }: EditorProps) => {
   return (
     <div className="p-4">
       <p>Users: {userCount}</p>
-      <p>User ID: {userId || "Waiting for ID..."}</p>
+      {/* <p>User ID: {userId || "Waiting for ID..."}</p>  For Debugging Purposes */}
       <div
         ref={editorRef}
         className="h-screen w-screen p-8 text-lg outline-none overflow-auto bg-white relative"
