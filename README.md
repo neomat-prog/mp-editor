@@ -10,3 +10,5 @@
 - ![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?logo=typescript&logoColor=white) **TypeScript** - Programming language for both frontend and backend.
 - ![Tailwind CSS](https://img.shields.io/badge/-Tailwind_CSS-38B2AC?logo=tailwind-css&logoColor=white) **Tailwind CSS** - Utility-first CSS framework for styling.
 - ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?logo=postgresql&logoColor=white) **PostgreSQL** - database for storing your session, content, code data.
+
+Work in Progress 👷
