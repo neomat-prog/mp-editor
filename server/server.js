@@ -102,6 +102,24 @@ async function updateDocumentContent(sessionId, fileId, fileName, newContent, us
   }
 }
 
+async function deleteFile(sessionId, fileId) {
+  try {
+    const res = await pool.query(
+      "DELETE FROM documents WHERE session_id = $1 AND file_id = $2 RETURNING file_id",
+      [sessionId, fileId]
+    );
+    if (res.rowCount === 0) {
+      console.log(`No file found to delete: ${fileId} in session ${sessionId}`);
+      return false;
+    }
+    console.log(`Deleted file ${fileId} from session ${sessionId}`);
+    return true;
+  } catch (err) {
+    console.error(`Failed to delete file ${fileId} for session ${sessionId}:`, err);
+    throw err;
+  }
+}
+
 function generateUserId() {
   return crypto.randomBytes(5).toString("hex");
 }
@@ -183,6 +201,8 @@ io.on("connection", async (socket) => {
     console.log(`Socket ${socket.id} joined room ${sessionId}`);
     const { content } = await getDocumentContent(sessionId);
     socket.emit("init", content);
+    const files = await getFiles(sessionId); // Send files on join
+    socket.emit("files", { files });
   } catch (err) {
     console.error(`Failed to initialize session ${sessionId} for socket ${socket.id}:`, err);
     socket.emit("error", "Failed to load session");
@@ -230,6 +250,26 @@ io.on("connection", async (socket) => {
     } catch (err) {
       console.error(`Failed to create file for session ${sessionId}:`, err);
       socket.emit("error", "Failed to create file");
+    }
+  });
+
+  socket.on("deleteFile", async ({ fileId }) => {
+    if (!fileId || fileId === "default") {
+      console.log(`Invalid fileId ${fileId} for deletion in session ${sessionId}`);
+      socket.emit("error", "Cannot delete default file");
+      return;
+    }
+    console.log(`User ${userId} deleting file ${fileId} in session ${sessionId}`);
+    try {
+      const deleted = await deleteFile(sessionId, fileId);
+      if (deleted) {
+        io.to(sessionId).emit("fileDeleted", { fileId });
+      } else {
+        socket.emit("error", "File not found");
+      }
+    } catch (err) {
+      console.error(`Failed to delete file ${fileId} for session ${sessionId}:`, err);
+      socket.emit("error", "Failed to delete file");
     }
   });
 

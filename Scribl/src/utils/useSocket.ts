@@ -43,7 +43,6 @@ export const useSocket = ({
   );
   const [isLocalChange, setIsLocalChange] = useState(false);
   const [files, setFiles] = useState<File[]>(() => {
-    // Initialize from localStorage
     try {
       const stored = localStorage.getItem(`files_${sessionId}`);
       return stored
@@ -137,7 +136,7 @@ export const useSocket = ({
             userId: effectiveUserId,
             isCreator: isPrivate && !!pwd,
           });
-          socketRef.current?.emit("getFiles");
+          socketRef.current?.emit("getFiles"); // Fetch files on connect
         });
 
         socketRef.current?.on("setUserId", ({ userId }: { userId: string }) => {
@@ -156,7 +155,7 @@ export const useSocket = ({
             setFiles((prev) => {
               if (prev.some((f) => f.fileId === fileId)) return prev;
               const newFiles = [...prev, { fileId, fileName }];
-              updateLocalStorageFiles(newFiles); // Store in localStorage
+              updateLocalStorageFiles(newFiles);
               return newFiles;
             });
             if (socketRef.current && userId === creatorId) {
@@ -165,6 +164,21 @@ export const useSocket = ({
               setIsSwitchingFile(true);
             } else {
               console.log(`User ${userId} staying on file ${currentFileId}`);
+            }
+          }
+        );
+
+        socketRef.current?.on(
+          "fileDeleted",
+          ({ fileId }: { fileId: string }) => {
+            console.log(`File deleted: ${fileId}`);
+            setFiles((prev) => {
+              const newFiles = prev.filter((f) => f.fileId !== fileId);
+              updateLocalStorageFiles(newFiles);
+              return newFiles;
+            });
+            if (currentFileId === fileId) {
+              socketRef.current?.emit("switchFile", { fileId: "default" });
             }
           }
         );
@@ -179,7 +193,7 @@ export const useSocket = ({
               ? files
               : [{ fileId: "default", fileName: "untitled.txt" }];
             setFiles(newFiles);
-            updateLocalStorageFiles(newFiles); // Sync localStorage with server
+            updateLocalStorageFiles(newFiles); // Always sync with server
           }
         );
 
@@ -267,6 +281,7 @@ export const useSocket = ({
           socketRef.current?.off("fileCreated");
           socketRef.current?.off("files");
           socketRef.current?.off("switchFile");
+          socketRef.current?.off("fileDeleted");
           if (socketRef.current) {
             socketRef.current.disconnect();
             socketRef.current = null;
@@ -340,6 +355,13 @@ export const useSocket = ({
     }
   }, []);
 
+  const deleteFile = useCallback((fileId: string) => {
+    if (socketRef.current) {
+      console.log(`Deleting file ${fileId} for session ${sessionId}`);
+      socketRef.current.emit("deleteFile", { fileId });
+    }
+  }, []);
+
   const switchFile = useCallback(
     (fileId: string) => {
       if (socketRef.current && fileId !== currentFileId) {
@@ -363,6 +385,7 @@ export const useSocket = ({
     setInputPassword,
     inputPassword: state.inputPassword || "",
     createFile,
+    deleteFile,
     files,
     currentFileId,
     switchFile,
