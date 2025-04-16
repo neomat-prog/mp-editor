@@ -1,5 +1,28 @@
-@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-.remote-cursor {
-  pointer-events: none; 
+:root {
+  --vscode-bg-dark: #1e1e1e;
+  --vscode-editor-bg: #252526;
+  --vscode-sidebar-bg: #333333;
+  --vscode-explorer-bg: #2d2d2d;
+  --vscode-tabs-bg: #252526;
+  --vscode-tabs-hover: #323233;
+  --vscode-titlebar-bg: #1e1e1e;
+  --vscode-panel: #252526;
+  --vscode-text: #d4d4d4;
+  --vscode-text-secondary: #858585;
+  --vscode-blue: #007acc;
+  --vscode-blue-hover: #005f9e;
+  --vscode-border: #454545;
+  --vscode-error: #f48771;
+  --vscode-error-bg: #520000;
+  --vscode-input: #3c3c3c;
+  --vscode-sidebar-hover: #404040;
+}
+
+body {
+  background-color: var(--vscode-bg-dark);
+  color: var(--vscode-text);
 }

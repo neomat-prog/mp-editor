@@ -4,6 +4,10 @@ import { useSocket } from "../utils/useSocket";
 import { EditorProps } from "../utils/types";
 import { debounce } from "lodash";
 import EditorContent from "./EditorContent";
+import FileExplorer from "./FileExplorer";
+import EditorTabs from "./EditorTabs";
+import Sidebar from "./Sidebar";
+import TopBar from "./TopBar";
 
 const Editor = ({ sessionId }: EditorProps) => {
   const location = useLocation();
@@ -87,42 +91,44 @@ const Editor = ({ sessionId }: EditorProps) => {
 
   if (!isConnected) {
     return (
-      <div className="p-4">
+      <div className="flex h-screen items-center justify-center bg-vscode-bg-dark p-4">
         {requiresPassword ? (
-          <>
-            <h2>Enter Password for {sessionId}</h2>
-            {error && <p className="text-red-500">{error}</p>}
+          <div className="rounded-lg bg-vscode-panel p-6 shadow-lg">
+            <h2 className="mb-4 text-lg font-semibold text-vscode-text">
+              Enter Password for {sessionId}
+            </h2>
+            {error && <p className="mb-2 text-vscode-error">{error}</p>}
             <form onSubmit={handlePasswordSubmit} className="flex gap-2">
               <input
                 type="text"
                 value={inputPassword}
                 onChange={(e) => setInputPassword(e.target.value)}
-                className="outline border-1 p-1 rounded-2xl"
+                className="rounded-md border border-vscode-border bg-vscode-input p-2 text-vscode-text placeholder-vscode-text-secondary focus:outline-none focus:ring-1 focus:ring-vscode-blue"
                 placeholder="Password"
               />
               <button
                 type="submit"
-                className="outline border-1 rounded-2xl p-2"
+                className="rounded-md bg-vscode-blue px-4 py-2 text-vscode-text hover:bg-vscode-blue-hover"
               >
                 Join
               </button>
             </form>
-          </>
+          </div>
         ) : (
-          <div>
+          <div className="text-center text-vscode-text">
             <p>Loading session {sessionId}...</p>
             {error && (
-              <div>
-                <p className="text-red-500">{error}</p>
+              <div className="mt-4">
+                <p className="text-vscode-error">{error}</p>
                 {error !== "Too many connections" ? (
                   <button
                     onClick={handleRetry}
-                    className="mt-2 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+                    className="mt-2 rounded-md bg-vscode-blue px-4 py-2 text-vscode-text hover:bg-vscode-blue-hover"
                   >
                     Retry Connection
                   </button>
                 ) : (
-                  <p className="text-gray-500">
+                  <p className="mt-2 text-vscode-text-secondary">
                     Please wait 30 seconds before retrying
                   </p>
                 )}
@@ -135,45 +141,33 @@ const Editor = ({ sessionId }: EditorProps) => {
   }
 
   return (
-    <div className="p-4">
-      <p>Users: {userCount}</p>
-      {error && <p className="text-red-500">{error}</p>}
-      <button
-        onClick={debouncedCreateSession}
-        className="mb-2 px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
-      >
-        Create Public Session
-      </button>
-      <button
-        onClick={handleCreateFile}
-        className="mb-2 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-      >
-        New File
-      </button>
-      <div className="mb-4 flex gap-2">
-        {files.map(({ fileId, fileName }) => (
-          <button
-            key={fileId}
-            onClick={() => handleSwitchFile(fileId)}
-            className={`px-4 py-2 rounded ${
-              fileId === currentFileId
-                ? "bg-gray-300"
-                : "bg-gray-100 hover:bg-gray-200"
-            }`}
-          >
-            {fileName}
-          </button>
-        ))}
+    <div className="flex h-screen flex-col bg-vscode-bg-dark text-vscode-text">
+      <TopBar userCount={userCount} onCreateSession={debouncedCreateSession} />
+      <div className="flex flex-1 overflow-hidden">
+        <Sidebar onCreateFile={handleCreateFile} files={files} onSwitchFile={handleSwitchFile} />
+        <div className="flex flex-1 flex-col">
+          {/* <FileExplorer files={files} onSwitchFile={handleSwitchFile} /> */}
+          <EditorTabs
+            files={files}
+            currentFileId={currentFileId}
+            onSwitchFile={handleSwitchFile}
+          />
+          {error && (
+            <p className="p-2 text-vscode-error bg-vscode-error-bg">{error}</p>
+          )}
+          <div className="flex-1 overflow-auto bg-vscode-editor-bg">
+            <EditorContent
+              currentFileId={currentFileId}
+              content={contents[currentFileId] || ""}
+              setContent={(content: string) =>
+                setContents((prev) => ({ ...prev, [currentFileId]: content }))
+              }
+              handleEdit={handleEdit}
+              isSwitchingFile={isSwitchingFile}
+            />
+          </div>
+        </div>
       </div>
-      <EditorContent
-        currentFileId={currentFileId}
-        content={contents[currentFileId] || ""}
-        setContent={(content: string) =>
-          setContents((prev) => ({ ...prev, [currentFileId]: content }))
-        }
-        handleEdit={handleEdit}
-        isSwitchingFile={isSwitchingFile}
-      />
     </div>
   );
 };
