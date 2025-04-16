@@ -7,7 +7,7 @@ import {
   emitCursorEvent,
 } from "../sockets/socketEvents";
 import { SocketState } from "./types";
-import { debounce } from "lodash";
+import { throttle } from "lodash";
 
 interface UseSocketProps {
   sessionId: string;
@@ -133,16 +133,19 @@ export const useSocket = ({
 
         socketRef.current?.on(
           "fileCreated",
-          ({ fileId, fileName }: { fileId: string; fileName: string }) => {
-            console.log(`New file created: ${fileName} (${fileId})`);
+          ({ fileId, fileName, creatorId }: { fileId: string; fileName: string; creatorId: string }) => {
+            console.log(`New file created: ${fileName} (${fileId}) by user ${creatorId}`);
             setFiles((prev) => {
               if (prev.some((f) => f.fileId === fileId)) return prev;
+              console.log(`Adding file ${fileName} to files list`);
               return [...prev, { fileId, fileName }];
             });
-            if (socketRef.current) {
-              console.log(`Auto-switching to new file ${fileId}`);
+            if (socketRef.current && userId === creatorId) {
+              console.log(`Creator ${userId} auto-switching to new file ${fileId}`);
               socketRef.current.emit("switchFile", { fileId });
               setIsSwitchingFile(true);
+            } else {
+              console.log(`User ${userId} staying on file ${currentFileId}`);
             }
           }
         );
@@ -291,23 +294,23 @@ export const useSocket = ({
     };
   }, [connectSocket, isPrivate, password]);
 
-  const debouncedHandleEdit = useCallback(
-    debounce((content: string) => {
+  const throttledHandleEdit = useCallback(
+    throttle((content: string) => {
       setIsLocalChange(true);
       if (socketRef.current) {
         const cursorOffset = getCursorOffset();
         console.log(`Emitting edit for file ${currentFileId}:`, content.slice(0, 50));
         emitEditEvent(socketRef.current, content, cursorOffset, clientId, currentFileId);
       }
-    }, 100),
+    }, 50),
     [clientId, currentFileId]
   );
 
   const handleEdit = useCallback(
     (content: string) => {
-      debouncedHandleEdit(content);
+      throttledHandleEdit(content);
     },
-    [debouncedHandleEdit]
+    [throttledHandleEdit]
   );
 
   const createFile = useCallback(() => {
@@ -319,10 +322,12 @@ export const useSocket = ({
 
   const switchFile = useCallback(
     (fileId: string) => {
-      if (socketRef.current) {
+      if (socketRef.current && fileId !== currentFileId) {
         console.log(`Switching to file ${fileId} from ${currentFileId}`);
         socketRef.current.emit("switchFile", { fileId });
         setIsSwitchingFile(true);
+      } else {
+        console.log(`Switch to file ${fileId} skipped: same as current or no socket`);
       }
     },
     [currentFileId, setIsSwitchingFile]

@@ -34,7 +34,6 @@ const EditorContent = ({
   }, [currentFileId, content, isSwitchingFile]);
 
   useEffect(() => {
-    // Render cursors (basic implementation)
     const renderCursors = () => {
       if (!editorRef.current) return;
       const existingCursors = editorRef.current.querySelectorAll(".remote-cursor");

@@ -124,6 +124,7 @@ const cursorPositions = new Map();
 const sessions = new Map();
 const userIds = new Map();
 const knownUserIds = new Set();
+const editQueue = new Map();
 
 io.on("connection", async (socket) => {
   const ip = socket.handshake.address;
@@ -225,7 +226,7 @@ io.on("connection", async (socket) => {
         "INSERT INTO documents (session_id, file_id, file_name, content, user_id) VALUES ($1, $2, $3, $4, $5)",
         [sessionId, fileId, fileName, "", userId]
       );
-      io.to(sessionId).emit("fileCreated", { fileId, fileName });
+      io.to(sessionId).emit("fileCreated", { fileId, fileName, creatorId: userId });
     } catch (err) {
       console.error(`Failed to create file for session ${sessionId}:`, err);
       socket.emit("error", "Failed to create file");
@@ -251,10 +252,11 @@ io.on("connection", async (socket) => {
     console.log(`User ${userId} switching to file ${fileId} in session ${sessionId}`);
     try {
       const { content, fileName } = await getDocumentContent(sessionId, fileId);
+      console.log(`Sending switchFile response for file ${fileId}:`, content.slice(0, 50));
       socket.emit("switchFile", { fileId, content, fileName });
     } catch (err) {
       console.error(`Failed to switch file ${fileId} for session ${sessionId}:`, err);
-      socket.emit("error", "Failed to switch file");
+      socket.emit("error", `Failed to switch file: ${err.message}`);
     }
   });
 
@@ -263,18 +265,36 @@ io.on("connection", async (socket) => {
     const userId = userIds.get(socket.id);
     const files = await getFiles(sessionId);
     const fileName = files.find((f) => f.fileId === fileId)?.fileName || `untitled-${fileId}.txt`;
+    const editKey = `${sessionId}:${fileId}`;
+    
     console.log(
       `Received edit in session ${sessionId} on file ${fileName} (${fileId}) by user ${userId} (client ${clientId}):`,
       content.slice(0, 50),
       `cursor at ${cursorOffset}`
     );
-    try {
-      await updateDocumentContent(sessionId, fileId, fileName, content, userId);
-      io.to(sessionId).emit("update", { content, cursors: Object.fromEntries(sessionCursors), fileId, userId });
-    } catch (err) {
-      console.error(`Failed to update edit for session ${sessionId}, file ${fileId}:`, err);
-      socket.emit("error", "Failed to save edit");
-    }
+
+    editQueue.set(editKey, { content, userId, fileName });
+    
+    clearTimeout(editQueue.get(editKey)?.timeout);
+    const timeout = setTimeout(async () => {
+      const latestEdit = editQueue.get(editKey);
+      if (latestEdit) {
+        try {
+          await updateDocumentContent(sessionId, fileId, latestEdit.fileName, latestEdit.content, latestEdit.userId);
+          io.to(sessionId).emit("update", {
+            content: latestEdit.content,
+            cursors: Object.fromEntries(sessionCursors),
+            fileId,
+            userId: latestEdit.userId,
+          });
+          editQueue.delete(editKey);
+        } catch (err) {
+          console.error(`Failed to update edit for session ${sessionId}, file ${fileId}:`, err);
+          socket.emit("error", "Failed to save edit");
+        }
+      }
+    }, 50);
+    editQueue.set(editKey, { ...editQueue.get(editKey), timeout });
   });
 
   socket.on("cursor", (cursorOffset, fileId = "default") => {

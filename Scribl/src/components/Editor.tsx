@@ -137,6 +137,7 @@ const Editor = ({ sessionId }: EditorProps) => {
   return (
     <div className="p-4">
       <p>Users: {userCount}</p>
+      {error && <p className="text-red-500">{error}</p>}
       <button
         onClick={debouncedCreateSession}
         className="mb-2 px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
@@ -159,7 +160,6 @@ const Editor = ({ sessionId }: EditorProps) => {
                 ? "bg-gray-300"
                 : "bg-gray-100 hover:bg-gray-200"
             }`}
-            disabled={isSwitchingFile}
           >
             {fileName}
           </button>
