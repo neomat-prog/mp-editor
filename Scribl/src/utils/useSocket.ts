@@ -42,9 +42,18 @@ export const useSocket = ({
     localStorage.getItem("userId") || propUserId
   );
   const [isLocalChange, setIsLocalChange] = useState(false);
-  const [files, setFiles] = useState<File[]>([
-    { fileId: "default", fileName: "untitled.txt" },
-  ]);
+  const [files, setFiles] = useState<File[]>(() => {
+    // Initialize from localStorage
+    try {
+      const stored = localStorage.getItem(`files_${sessionId}`);
+      return stored
+        ? JSON.parse(stored)
+        : [{ fileId: "default", fileName: "untitled.txt" }];
+    } catch (err) {
+      console.warn(`Failed to parse localStorage files for ${sessionId}:`, err);
+      return [{ fileId: "default", fileName: "untitled.txt" }];
+    }
+  });
   const [currentFileId, setCurrentFileId] = useState<string>("default");
   const socketRef = useRef<Socket | null>(null);
   const clientId = Math.random().toString(36).substring(2, 8);
@@ -76,6 +85,15 @@ export const useSocket = ({
     (pwd: string) => setState((prev) => ({ ...prev, inputPassword: pwd })),
     []
   );
+
+  const updateLocalStorageFiles = useCallback((newFiles: File[]) => {
+    try {
+      localStorage.setItem(`files_${sessionId}`, JSON.stringify(newFiles));
+      console.log(`Stored files for ${sessionId} in localStorage:`, newFiles);
+    } catch (err) {
+      console.warn(`Failed to store files in localStorage for ${sessionId}:`, err);
+    }
+  }, [sessionId]);
 
   const connectSocket = useCallback(
     (pwd?: string) => {
@@ -137,8 +155,9 @@ export const useSocket = ({
             console.log(`New file created: ${fileName} (${fileId}) by user ${creatorId}`);
             setFiles((prev) => {
               if (prev.some((f) => f.fileId === fileId)) return prev;
-              console.log(`Adding file ${fileName} to files list`);
-              return [...prev, { fileId, fileName }];
+              const newFiles = [...prev, { fileId, fileName }];
+              updateLocalStorageFiles(newFiles); // Store in localStorage
+              return newFiles;
             });
             if (socketRef.current && userId === creatorId) {
               console.log(`Creator ${userId} auto-switching to new file ${fileId}`);
@@ -156,11 +175,11 @@ export const useSocket = ({
             console.log(
               `Received files: ${files.map((f) => f.fileName).join(", ")}`
             );
-            setFiles(
-              files.length
-                ? files
-                : [{ fileId: "default", fileName: "untitled.txt" }]
-            );
+            const newFiles = files.length
+              ? files
+              : [{ fileId: "default", fileName: "untitled.txt" }];
+            setFiles(newFiles);
+            updateLocalStorageFiles(newFiles); // Sync localStorage with server
           }
         );
 
@@ -267,6 +286,7 @@ export const useSocket = ({
       setRequiresPassword,
       setIsSwitchingFile,
       setContent,
+      updateLocalStorageFiles,
     ]
   );
 

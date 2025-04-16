@@ -110,7 +110,7 @@ const EditorContent = ({
     >
       {isSwitchingFile && (
         <div className="absolute inset-0 flex items-center justify-center">
-          <p className="text-gray-500">Switching file...</p>
+          {/* <p className="text-gray-500">Switching file...</p> */}
         </div>
       )}
       <div
